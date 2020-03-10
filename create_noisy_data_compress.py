@@ -17,8 +17,10 @@ ADC_12_bit_low = 1023
 ADC_12_bit_high = 4095
 lows_pn = np.array([0, 16, 64, 304, 1024, 4864]) # photon number lower bounds
 ups_pn = np.array([15, 63, 303, 1023, 4863, 16383]) # photon number upper bounds
-lows_rv = np.array([0,20,32,80,128,320]) #reported value lower bounds
-ups_rv = np.array([15,31,63,127,255,511]) #reported value lower bounds
+# lows_rv = np.array([0,20,32,80,128,320]) #reported value lower bounds
+# ups_rv = np.array([15,31,63,127,255,511]) #reported value lower bounds
+lows_rv = np.array([0,10,16,40,64,160]) #reported value lower bounds
+ups_rv = np.array([7,15,31,63,127,255]) #reported value lower bounds
 
 o = h5py.File(src_fname, 'r')['exchange/data']
 
@@ -94,20 +96,22 @@ for n_ph_tx in ['1e4', '4e4', '1e5', '4e5', '1e6', '1.75e6', '4e6', '1e7', '1.75
                     # prj_o_inten_norm = prj_o_inten / dc_intensity
                     print(n_ph)
                     prj_o_inten_noisy = np.random.poisson(pro_o_inten_scaled)
-#                    prj_o_inten_noisy = prj_o_inten_noisy / multiplier
+                    # prj_o_inten_noisy = prj_o_inten_noisy / multiplier
                     gain_set = in_which_gain_range(prj_o_inten_noisy)
                     ADC_output = ADC_ouput_generator(prj_o_inten_noisy)
                     value_comprs = ADC_report_value_generator(ADC_output)
                     
-                    pn_each_step = np.array([1, 4, 7.5, 15, 30, 60])
-                    base_pn = np.array([0, 19, 70.5, 318, 1053, 4923])
+                    # pn_each_step = np.array([1, 4, 7.5, 15, 30, 60])
+                    # base_pn = np.array([0, 19, 70.5, 318, 1053, 4923])
+                    pn_each_step = np.array([2, 8, 15, 30, 60, 120])
+                    base_pn = np.array([0, 23, 78, 333, 1083, 4983])
                     prj_o_inten_noisy_decomprs = (value_comprs - lows_rv[gain_set])*pn_each_step[gain_set]+base_pn[gain_set]
                     
-#                    noise = prj_o_inten_noisy - prj_o_inten
-#                    noise = prj_o_inten_noisy - prj_o_inten_scaled
-#                    snr = np.var(prj_o_inten) / np.var(noise)
-#                    snr = np.var(prj_o_inten_scaled) / np.var(noise)
-#                    snr_ls.append(snr)
+                    # noise = prj_o_inten_noisy - prj_o_inten
+                    # noise = prj_o_inten_noisy - prj_o_inten_scaled
+                    # snr = np.var(prj_o_inten) / np.var(noise)
+                    # snr = np.var(prj_o_inten_scaled) / np.var(noise)
+                    # snr_ls.append(snr)
                     data = np.sqrt(prj_o_inten_noisy_decomprs)
                     n[i, j] = data.astype('complex64')
 
