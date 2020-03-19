@@ -84,5 +84,5 @@ for n_ph in n_ls:
         params['fname'] = 'data_cell_phase.h5'
     else:
         params['fname'] = 'data_cell_phase_{}.h5'.format(n_ph)
-    params['output_folder'] = n_ph
+    params['output_folder'] = 'mix_'+ n_ph
     reconstruct_ptychography(**params)
