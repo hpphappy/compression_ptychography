@@ -1,6 +1,6 @@
 obj_size            (325, 325, 1)
 probe_size          (72, 72)
-output_folder       cell/ptychography/comp_n1.75e8
+output_folder       cell/ptychography/dss_comp_n1.75e8
 theta_downsample    1
 n_theta             1
 n_pos               4488
@@ -14,7 +14,7 @@ minibatch_size      4488
 free_prop_cm        inf
 psize_cm            1e-07
 energy_ev           5000
-fname               data_cell_phase_comp_n1.75e8.h5
+fname               data_cell_phase_dss_comp_n1.75e8.h5
 probe_learning_rate 0.001
 probe_type          gaussian
 optimize_probe_defocusingFalse

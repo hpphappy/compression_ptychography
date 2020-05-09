@@ -13,10 +13,8 @@ grid_delta = np.load('cell/ptychography/phantom/grid_delta.npy')
 n_sample_pixel = np.count_nonzero(grid_delta > 1e-10)
 print(n_sample_pixel)
 
-ADC_12_bit_low = 1023
-ADC_12_bit_high = 4095
-lows_pn = np.array([0, 16, 64, 304, 1024, 4864]) # photon number lower bounds
-ups_pn = np.array([15, 63, 303, 1023, 4863, 16383]) # photon number upper bounds
+lows_pn = np.array([0, 16, 64, 256, 1024, 4096]) # photon number lower bounds
+ups_pn = np.array([15, 63, 255, 1023, 4095, 16383]) # photon number upper bounds
 
 o = h5py.File(src_fname, 'r')['exchange/data']
 
@@ -27,53 +25,26 @@ def in_which_gain_range(pn):
             result[i,j] = np.flatnonzero(np.logical_and(pn[i,j] >= lows_pn, pn[i,j] <= ups_pn))
     return result
 
-def ADC_ouput_generator(pn):
-    gain = np.where((gain_set%2==0),ADC_12_bit_low/(ups_pn[gain_set]-lows_pn[gain_set]),\
-                    (ADC_12_bit_high-(ADC_12_bit_low+1))/(ups_pn[gain_set]-lows_pn[gain_set]))
-    ADC_output = np.where((gain_set%2==0),(pn-lows_pn[gain_set])*gain,\
-                          (pn-lows_pn[gain_set])*gain+ADC_12_bit_low+1)
-    ADC_output = np.round(ADC_output)
-    return ADC_output
-
-def ADC_report_value_generator(ADC_output):
-    gain_rv = np.where((gain_set%2==0),(ups_rv[gain_set]-lows_rv[gain_set])/(ADC_12_bit_low),\
-                       (ups_rv[gain_set]-lows_rv[gain_set])/(ADC_12_bit_high-(ADC_12_bit_low+1))) 
-    reported_value = np.where((gain_set%2==0), ADC_output*gain_rv+lows_rv[gain_set],\
-                              (ADC_output-(ADC_12_bit_low+1))*gain_rv+lows_rv[gain_set])
-    reported_value = np.round(reported_value)
-    return reported_value
-
-def calculate_decompressed_pn(value_comprs, gain_set,lows_rv, pn_each_step, base_pn):
-    prj_o_inten_noisy_decomprs = (value_comprs - lows_rv[gain_set]) * pn_each_step[gain_set] + base_pn[gain_set]
+def calculate_decompressed_pn(pn, gain_set, lows_pn, pn_each_step):
+    prj_o_inten_noisy_decomprs = lows_pn[gain_set]+pn_each_step[gain_set]*np.floor((pn-lows_pn[gain_set])/pn_each_step[gain_set])
     return prj_o_inten_noisy_decomprs
+
 
 #encoding_mode =
 #0: exmaple mode that the encoding step in all 6 subregions are encoded such that all step sizes are less or equal to the Poisson noise
 #1: the encoding step sizes are twice as much as ones of the example mode in all subregions
 #2: the encoding step sizes are the same as mode 0 for the first 3 subregions, are the same as mode 2 as mode 1 for the remain 3 subregions
 
-encoding_mode = 2
+encoding_mode = 0
 
 if encoding_mode == 0:
-    lows_rv = np.array([0, 20, 32, 80, 128, 320]) #reported value lower bounds
-    ups_rv = np.array([15, 31, 63, 127, 255, 511]) #reported value lower bounds
-
-    pn_each_step = np.array([1, 4, 7.5, 15, 30, 60])
-    base_pn = np.array([0, 19, 70.5, 318, 1053, 4923])
+    pn_each_step = np.array([1, 4, 8, 16, 32, 64])
 
 elif encoding_mode == 1:
-    lows_rv = np.array([0, 10, 16, 40, 64, 160]) #reported value lower bounds
-    ups_rv = np.array([7, 15, 31, 63, 127, 255]) #reported value lower bounds
-
-    pn_each_step = np.array([2, 8, 15, 30, 60, 120])
-    base_pn = np.array([0, 23, 78, 333, 1083, 4983])
+    pn_each_step = np.array([2, 8, 16, 32, 64, 128])
 
 elif encoding_mode == 2:
-    lows_rv = np.array([0, 20, 32, 64, 88, 152]) #reported value lower bounds
-    ups_rv = np.array([15, 31, 63, 87, 151, 247]) #reported value lower bounds
-
-    pn_each_step = np.array([1, 4, 7.5, 30, 60, 120])
-    base_pn = np.array([0, 19, 70.5, 333, 1083, 4983])
+    pn_each_step = np.array([1, 4, 8, 32, 64, 128])
 
 
 # for n_ph_tx in ['1e4', '4e4', '1e5', '4e5', '1e6', '1.75e6', '4e6', '1e7', '1.75e7', '4e7', '1e8', '1.75e8', '4e8', '1e9']:
@@ -82,8 +53,8 @@ for n_ph_tx in ['1e4', '4e4', '1e5', '4e5', '1e6', '1.75e6', '4e6', '1e7', '1.75
 
         n_ph = float(n_ph_tx) / n_sample_pixel
         # dest_fname = 'cone_256_foam_ptycho/data_cone_256_foam_1nm_n{}_temp.h5'.format(n_ph_tx)
-        # dest_fname = os.path.join(os.path.dirname(src_fname), os.path.splitext(os.path.basename(src_fname))[0] + '_mix_comp_n{}{}.h5'.format(n_ph_tx, postfix))
-        dest_fname = os.path.join(os.path.dirname(src_fname), os.path.splitext(os.path.basename(src_fname))[0] + '_mix_comp_n{}{}.h5'.format(n_ph_tx, postfix))
+        # dest_fname = os.path.join(os.path.dirname(src_fname), os.path.splitext(os.path.basename(src_fname))[0] + '_comp_n{}{}.h5'.format(n_ph_tx, postfix))
+        dest_fname = os.path.join(os.path.dirname(src_fname), os.path.splitext(os.path.basename(src_fname))[0] + '_comp_n{}{}.h5'.format(n_ph_tx, postfix))
 
         # dest_fname = 'cell/ptychography/data_cell_phase_n4e8.h5'
 
@@ -128,9 +99,8 @@ for n_ph_tx in ['1e4', '4e4', '1e5', '4e5', '1e6', '1.75e6', '4e6', '1e7', '1.75
                     prj_o_inten_noisy = np.random.poisson(pro_o_inten_scaled)
                     # prj_o_inten_noisy = prj_o_inten_noisy / multiplier
                     gain_set = in_which_gain_range(prj_o_inten_noisy)
-                    ADC_output = ADC_ouput_generator(prj_o_inten_noisy)
-                    value_comprs = ADC_report_value_generator(ADC_output)
-                    prj_o_inten_noisy_decomprs = calculate_decompressed_pn(value_comprs, gain_set,lows_rv, pn_each_step, base_pn)
+
+                    prj_o_inten_noisy_decomprs = calculate_decompressed_pn(prj_o_inten_noisy, gain_set, lows_pn, pn_each_step)
 
                     # noise = prj_o_inten_noisy - prj_o_inten
                     # noise = prj_o_inten_noisy - prj_o_inten_scaled
@@ -157,7 +127,7 @@ for n_ph_tx in ['1e4', '4e4', '1e5', '4e5', '1e6', '1.75e6', '4e6', '1e7', '1.75
 
         print('Average SNR is {}.'.format(np.mean(snr_ls)))
 
-        dxchange.write_tiff(abs(n[0]), os.path.join(os.path.dirname(dest_fname), 'mix_comp_n{}{}'.format(n_ph_tx, postfix)), dtype='float32', overwrite=True)
+        dxchange.write_tiff(abs(n[0]), os.path.join(os.path.dirname(dest_fname), 'comp_n{}{}'.format(n_ph_tx, postfix)), dtype='float32', overwrite=True)
 
 
         # ------- based on SNR -------

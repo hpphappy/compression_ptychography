@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('pdf')
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import h5py
@@ -6,145 +8,99 @@ from util import *
 import dxchange
 import numpy as np
 
-path = 'cell/ptychography/'
-fname = 'data_cell_phase.h5'
-save_path = 'cell/ptychography/frc'
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
 
-grid_delta = np.load('cell/ptychography/phantom/grid_delta.npy')
-print('dimension of the sample = ' +', '.join(map(str,grid_delta.shape)))
+params_2d_cell = {'grid_delta': np.load('cell/ptychography/phantom/grid_delta.npy'),
+                  'obj':[],
+                  'ref':[],
+                  'n_ph_tx':'4e4',
+                  'save_path': 'cell/ptychography/comparison',
+                  'fig_ax':[],
+                  'radius_ls':[],
+                  'n_ph_intersection_ls':[],
+                  'radius_intersection_ls':[],
+                  'T_half_bit_ls':[],
+                  'show_plot_title': True,
+                  'encoding_mode': 3,
+                  'plot_T_half_th': True,
+                  'save_mask': False,
+                  }
+params = params_2d_cell
 
-n_sample_pixel = np.count_nonzero(grid_delta > 1e-10)
+print('dimension of the sample = ' +', '.join(map(str, params['grid_delta'].shape)))
+n_sample_pixel = np.count_nonzero(params['grid_delta']> 1e-10)
 print('n_sample_pixel = %d' %n_sample_pixel)
-print('finite support area ratio in sample = %.3f' %(n_sample_pixel/(grid_delta.shape[0]*grid_delta.shape[1])))
+print('finite support area ratio in sample = %.3f' %(n_sample_pixel/(params['grid_delta'].shape[0]*params['grid_delta'].shape[1])))
 
+if params['encoding_mode'] == 0: encoding_mode = 'normal'
+if params['encoding_mode'] == 1: encoding_mode = 'comp'
+if params['encoding_mode'] == 2: encoding_mode = 'dss_comp'
+if params['encoding_mode'] == 3: encoding_mode = 'mix_comp'
 
 matplotlib.rcParams['pdf.fonttype'] = 'truetype'
 fontProperties = {'family': 'serif', 'serif': ['Times New Roman'], 'weight': 'normal', 'size': 12}
 plt.rc('font', **fontProperties)
+#spec = gridspec.GridSpec(1, 2, width_ratios=[7, 1])
+#fig = plt.figure(figsize=(8, 5))
+spec = gridspec.GridSpec(1, 1)
+fig = plt.figure(figsize=(6, 4))
 
+params['fig_ax'] = fig.add_subplot(spec[0, 0])
+
+path = os.path.dirname(params['save_path'])
 n_ls = ['1e4', '4e4', '1e5', '4e5', '1e6', '1.75e6', '4e6', '1e7', '1.75e7', '4e7', '1e8', '1.75e8', '4e8']
 #n_ls = ['1e4', '4e4']
-step_size = 1
-spec = gridspec.GridSpec(3, 2, width_ratios=[7, 1])
-fig = plt.figure(figsize=(8,15))
-n_ph_ls = []
-fig_ax1 = fig.add_subplot(spec[0,0])
-idx_intersection_normal_ls = []
-n_ph_crossing_normal_ls = []
-for i, n_ph_tx in enumerate(n_ls):
-    n_ph = float(n_ph_tx)/n_sample_pixel
-    n_ph = np.round(n_ph,1)
-    n_ph_ls.append(n_ph)
-    obj_dir = os.path.join(path, 'n' + n_ph_tx)
-    ref_dir = os.path.join(path, 'n' + n_ph_tx + '_ref')
-    obj = dxchange.read_tiff(os.path.join(obj_dir, 'delta_ds_1.tiff'))
-    obj = obj[:,:,0]
-    ref = dxchange.read_tiff(os.path.join(ref_dir, 'delta_ds_1.tiff'))
-    ref = ref[:,:,0]
+n_ph_intersection_ls = []
+radius_intersection_ls = []
+for n_ph_tx in n_ls:
+    params['n_ph_tx'] = n_ph_tx
 
-    radius_max = int(min(obj.shape) / 2)
-    radius_ls = np.arange(1, radius_max, step_size)
-    np.save(os.path.join(save_path, 'radii.npy'), radius_ls)
-    f_obj = np.fft.fftshift(np.fft.fft2(obj))
-    f_ref = np.fft.fftshift(np.fft.fft2(ref))
-    f_obj_2 = np.abs(f_obj) ** 2
-    f_ref_2 = np.abs(f_ref) ** 2
-    f_prod = f_obj * np.conjugate(f_ref)
+    if encoding_mode == 'normal':
+        obj_dir = os.path.join(path, 'n' + n_ph_tx)
+        ref_dir = os.path.join(path, 'n' + n_ph_tx + '_ref')
+    else:
+        obj_dir = os.path.join(path, encoding_mode + '_n' + n_ph_tx)
+        ref_dir = os.path.join(path, encoding_mode + '_n' + n_ph_tx + '_ref')
 
-    frc_ls = []
-    T_half_bit_ls = []
-    for rad in radius_ls:
-        print(rad)
-        mask = generate_ring(obj.shape, rad, anti_aliasing=2)
-        frc = abs(np.sum(f_prod * mask))
-        frc /= np.sqrt(np.sum(f_obj_2 * mask) * np.sum(f_ref_2 * mask))
-        frc_ls.append(frc)
-        nr = np.sqrt(np.count_nonzero(mask))
-        T_half_bit = (0.2071 + 1.9102 / nr) / (1.2071 + 0.97102 / nr)
-        T_half_bit_ls.append(T_half_bit)
-    np.save(os.path.join(save_path, 'frc' + n_ph_tx + '.npy'), frc_ls)
-    fig_ax1.plot(radius_ls.astype(float) / radius_ls[-1], frc_ls, label = n_ph_ls[i])
-    idx_intersection_normal = np.argwhere(np.diff(np.sign(np.array(T_half_bit_ls) - np.array(frc_ls)))).flatten()
-    if len(idx_intersection_normal) != 0:
-        idx_intersection_normal_ls.append(idx_intersection_normal[0]+1)
-        n_ph_crossing_normal_ls.append(n_ph)
+    params['obj'] = dxchange.read_tiff(os.path.join(obj_dir, 'delta_ds_1.tiff'))
+    params['obj'] = params['obj'][:, :, 0]
+    params['ref'] = dxchange.read_tiff(os.path.join(ref_dir, 'delta_ds_1.tiff'))
+    params['ref'] = params['ref'][:, :, 0]
+    if params['show_plot_title']: Plot_title = encoding_mode
+    else: Plot_title = None
+
+    n_ph_intersection, radius_intersection, params['radius_ls'], params['T_half_bit_ls'] = fourier_ring_correlation_v2(**params)
+
+    if n_ph_intersection != None:
+        params['n_ph_intersection_ls'].append(n_ph_intersection)
+        params['radius_intersection_ls'].append(radius_intersection)
     else:
         pass
+    
+if params['plot_T_half_th']:
+    half_bit_threshold(params['fig_ax'], params['radius_ls'], params['T_half_bit_ls'])
+
+#params['fig_ax'].legend(loc=3, bbox_to_anchor=(1.0, 0.0, 0.5, 0.5), fontsize=12, ncol=1, title='photon number')
+plt.savefig(os.path.join(params['save_path'], 'frc_'+str(params['encoding_mode'])+'.pdf'), format='pdf')
+
+fig.clear()
+plt.close(fig)
 
 
+np.savez(os.path.join(params['save_path'], 'frc_'+ str(params['encoding_mode'])+'_intersection'), np.array(params['n_ph_intersection_ls']), np.array(params['radius_intersection_ls']/params['radius_ls'][-1]))
 
+fig = plt.figure(figsize=(8, 5))
+fig_ax = fig.add_subplot(spec[0,0])
+fig_ax.plot(params['n_ph_intersection_ls'], params['radius_intersection_ls']/params['radius_ls'][-1], '-bs', markerfacecolor='none', markeredgecolor='blue', label = encoding_mode)
+# fig_ax.plot(n_ph_intersection_ls, radius_intersection_ls.astype(float) / radius_max, '-bs', markerfacecolor='none', markeredgecolor='blue', label = 'normal')
+# fig_ax.plot(n_ph_intersection_ls, radius_intersection_ls.astype(float) / radius_max, '-ro', markerfacecolor='none', markeredgecolor='red', label = 'comp')
+# fig_ax.plot(n_ph_intersection_ls, radius_intersection_ls.astype(float) / radius_max, '-gx', markerfacecolor='none', markeredgecolor='green', label = 'dss')
+# fig_ax.plot(n_ph_intersection_ls, radius_intersection_ls.astype(float) / radius_max, '-kD', markerfacecolor='none', markeredgecolor='black', label = 'mix')
+fig_ax.set_xlabel('Fluence (incident photons/pixel)')
+fig_ax.set_ylabel('FRC/half-bit crossing fraction')
+fig_ax.set_ylim(0,1.1)
+fig_ax.set_xscale('log')
+fig_ax.legend(loc=3, bbox_to_anchor=(1.0,0.0,0.5,0.5), ncol=1, title = 'data type')
 
-Fontsize = 12
-fig_ax1.set_title('normal')
-fig_ax1.set_xlabel('Spatial frequency (1 / Nyquist)', fontsize=Fontsize)
-fig_ax1.set_ylabel('FRC', fontsize=Fontsize)
-fig_ax1.plot(radius_ls.astype(float) / radius_ls[-1], T_half_bit_ls, 'k--',label = '1/2 bit threshold')
-fig_ax1.legend(loc=3, bbox_to_anchor=(1.0,0.0,0.5,0.5),fontsize=Fontsize,ncol=1, title = 'photon number')
-
-n_ph_ls = []
-fig_ax2 = fig.add_subplot(spec[1,0])
-idx_intersection_compressed_ls = []
-n_ph_crossing_compressed_ls = []
-for i, n_ph_tx in enumerate(n_ls):
-    n_ph = float(n_ph_tx)/n_sample_pixel
-    n_ph = np.round(n_ph,1)
-    n_ph_ls.append(n_ph)
-    obj_dir = os.path.join(path, 'comp_n' + n_ph_tx)
-    ref_dir = os.path.join(path, 'comp_n' + n_ph_tx + '_ref')
-    obj = dxchange.read_tiff(os.path.join(obj_dir, 'delta_ds_1.tiff'))
-    obj = obj[:,:,0]
-    ref = dxchange.read_tiff(os.path.join(ref_dir, 'delta_ds_1.tiff'))
-    ref = ref[:,:,0]
-
-    radius_max = int(min(obj.shape) / 2)
-    radius_ls = np.arange(1, radius_max, step_size)
-    np.save(os.path.join(save_path, 'comp_radii.npy'), radius_ls)
-    f_obj = np.fft.fftshift(np.fft.fft2(obj))
-    f_ref = np.fft.fftshift(np.fft.fft2(ref))
-    f_obj_2 = np.abs(f_obj) ** 2
-    f_ref_2 = np.abs(f_ref) ** 2
-    f_prod = f_obj * np.conjugate(f_ref)
-
-    frc_ls = []
-    T_half_bit_ls = []
-    for rad in radius_ls:
-        print(rad)
-        mask = generate_ring(obj.shape, rad, anti_aliasing=2)
-        frc = abs(np.sum(f_prod * mask))
-        frc /= np.sqrt(np.sum(f_obj_2 * mask) * np.sum(f_ref_2 * mask))
-        frc_ls.append(frc)
-
-        nr = np.sqrt(np.count_nonzero(mask))
-        T_half_bit = (0.2071 + 1.9102 / nr) / (1.2071 + 0.97102 / nr)
-        T_half_bit_ls.append(T_half_bit)
-    np.save(os.path.join(save_path, 'comp_frc' + n_ph_tx + '.npy'), frc_ls)
-    fig_ax2.plot(radius_ls.astype(float) / radius_ls[-1], frc_ls, label = n_ph_ls[i])
-    idx_intersection_compressed = np.argwhere(np.diff(np.sign(np.array(T_half_bit_ls) - np.array(frc_ls)))).flatten()
-    if len(idx_intersection_compressed) != 0:
-        idx_intersection_compressed_ls.append(idx_intersection_compressed[0]+1)
-        n_ph_crossing_compressed_ls.append(n_ph)
-    else:
-        pass
-
-
-Fontsize = 12
-fig_ax2.set_title('compressed data_double step size')
-fig_ax2.set_xlabel('Spatial frequency (1 / Nyquist)', fontsize=Fontsize)
-fig_ax2.set_ylabel('FRC', fontsize=Fontsize)
-fig_ax2.plot(radius_ls.astype(float) / radius_ls[-1], T_half_bit_ls, 'k--',label = '1/2 bit threshold')
-fig_ax2.legend(loc=3, bbox_to_anchor=(1.0,0.0,0.5,0.5),fontsize=Fontsize,ncol=1, title = 'photon number')
-
-fig_ax3 = fig.add_subplot(spec[2,0])
-fig_ax3.set_xlabel('Fluence (incident photons/pixel)', fontsize=Fontsize)
-fig_ax3.set_ylabel('FRC/half-bit crossing fraction', fontsize=Fontsize)
-fig_ax3.plot(n_ph_crossing_normal_ls, radius_ls[idx_intersection_normal_ls].astype(float) / radius_ls[-1], '-bs', markerfacecolor='none', markeredgecolor='blue', label = 'normal')
-fig_ax3.plot(n_ph_crossing_compressed_ls, radius_ls[idx_intersection_compressed_ls].astype(float) / radius_ls[-1], '-ro', markerfacecolor='none', markeredgecolor='red', label = 'compressed data')
-fig_ax3.set_ylim(0,1.2)
-fig_ax3.set_xscale('log')
-fig_ax3.legend(loc=3, bbox_to_anchor=(1.0,0.0,0.5,0.5),fontsize=Fontsize, ncol=1, title = 'data type')
-
-plt.savefig(os.path.join(save_path, 'frc.pdf'), format='pdf')
+plt.savefig(os.path.join(params['save_path'], 'frc_'+ str(params['encoding_mode'])+'_intersection.pdf'), format='pdf')
 fig.clear()
 plt.close(fig)

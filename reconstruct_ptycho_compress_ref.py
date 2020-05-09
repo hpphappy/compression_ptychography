@@ -76,8 +76,9 @@ params_2d_cell = {'fname': 'data_cell_phase.h5',
 params = params_2d_cell
 
 # n_ls = ['nonoise', 'n1e9', 'n1e8', 'n1e7', 'n1e6', 'n1e5', 'n1e4']
-#n_ls = ['nonoise', 'comp_n1e4', 'comp_n4e4', 'comp_n1e5', 'comp_n4e5', 'comp_n1e6', 'comp_n1.75e6', 'comp_n4e6', 'comp_n1e7', 'comp_n1.75e7', 'comp_n4e7', 'comp_n1e8', 'comp_n1.75e8', 'comp_n4e8']
 n_ls = ['comp_n1e4', 'comp_n4e4', 'comp_n1e5', 'comp_n4e5', 'comp_n1e6', 'comp_n1.75e6', 'comp_n4e6', 'comp_n1e7', 'comp_n1.75e7', 'comp_n4e7', 'comp_n1e8', 'comp_n1.75e8', 'comp_n4e8']
+# n_ls = ['nonoise', 'dss_comp_n1e4', 'dss_comp_n4e4', 'dss_comp_n1e5', 'dss_comp_n4e5', 'dss_comp_n1e6', 'dss_comp_n1.75e6', 'dss_comp_n4e6', 'dss_comp_n1e7', 'dss_comp_n1.75e7', 'dss_comp_n4e7', 'dss_comp_n1e8', 'dss_comp_n1.75e8', 'dss_comp_n4e8']
+# n_ls = ['nonoise', 'mix_comp_n1e4', 'mix_comp_n4e4', 'mix_comp_n1e5', 'mix_comp_n4e5', 'mix_comp_n1e6', 'mix_comp_n1.75e6', 'mix_comp_n4e6', 'mix_comp_n1e7', 'mix_comp_n1.75e7', 'mix_comp_n4e7', 'mix_comp_n1e8', 'mix_comp_n1.75e8', 'mix_comp_n4e8']
 n_ls = [x + '_ref' for x in n_ls]
 
 for n_ph in n_ls:
@@ -85,5 +86,5 @@ for n_ph in n_ls:
         params['fname'] = 'data_cell_phase.h5'
     else:
         params['fname'] = 'data_cell_phase_{}.h5'.format(n_ph)
-    params['output_folder'] = 'mix_'+ n_ph
+    params['output_folder'] = n_ph
     reconstruct_ptychography(**params)

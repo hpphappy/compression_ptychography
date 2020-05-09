@@ -7,6 +7,7 @@ import warnings
 from mpi4py import MPI
 import datetime
 from math import ceil, floor
+from matplotlib import gridspec
 
 try:
     import sys
@@ -643,8 +644,8 @@ def fourier_shell_correlation(obj, ref, step_size=1, save_path='fsc', save_mask=
         os.makedirs(save_path)
 
     radius_max = int(min(obj.shape) / 2)
-    f_obj = np.fft.fftshift(fftn(obj))
-    f_ref = np.fft.fftshift(fftn(ref))
+    f_obj = np.fft.fftshift(np.fft.fftn(obj))
+    f_ref = np.fft.fftshift(np.fft.fftn(ref))
     f_prod = f_obj * np.conjugate(f_ref)
     f_obj_2 = np.real(f_obj * np.conjugate(f_obj))
     f_ref_2 = np.real(f_ref * np.conjugate(f_ref))
@@ -674,15 +675,14 @@ def fourier_shell_correlation(obj, ref, step_size=1, save_path='fsc', save_mask=
     plt.ylabel('FSC')
     plt.savefig(os.path.join(save_path, 'fsc.pdf'), format='pdf')
 
-
 def fourier_ring_correlation(obj, ref, step_size=1, save_path='frc', save_mask=False):
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
     radius_max = int(min(obj.shape) / 2)
-    f_obj = np.fft.fftshift(fft2(obj))
-    f_ref = np.fft.fftshift(fft2(ref))
+    f_obj = np.fft.fftshift(np.fft.fft2(obj))
+    f_ref = np.fft.fftshift(np.fft.fft2(ref))
     f_prod = f_obj * np.conjugate(f_ref)
     f_obj_2 = np.real(f_obj * np.conjugate(f_obj))
     f_ref_2 = np.real(f_ref * np.conjugate(f_ref))
@@ -702,7 +702,7 @@ def fourier_ring_correlation(obj, ref, step_size=1, save_path='frc', save_mask=F
         fsc = abs(np.sum(f_prod * mask))
         fsc /= np.sqrt(np.sum(f_obj_2 * mask) * np.sum(f_ref_2 * mask))
         fsc_ls.append(fsc)
-        np.save(os.path.join(save_path, 'fsc.npy'), fsc_ls)
+    np.save(os.path.join(save_path, 'fsc.npy'), fsc_ls)
 
     matplotlib.rcParams['pdf.fonttype'] = 'truetype'
     fontProperties = {'family': 'serif', 'serif': ['Times New Roman'], 'weight': 'normal', 'size': 12}
@@ -712,6 +712,65 @@ def fourier_ring_correlation(obj, ref, step_size=1, save_path='frc', save_mask=F
     plt.ylabel('FRC')
     plt.savefig(os.path.join(save_path, 'frc.pdf'), format='pdf')
 
+def fourier_ring_correlation_v2(grid_delta, obj, ref, n_ph_tx, fig_ax, encoding_mode, save_path='test',
+                                step_size=1, plot_T_half_th=True, show_plot_title=True,
+                                plot_title = None, save_mask=False, **kwargs):
+    print(save_path)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    radius_max = int(min(obj.shape) / 2)
+    radius_ls = np.arange(1, radius_max, step_size)
+    np.save(os.path.join(save_path, 'radii_'+str(encoding_mode)+'.npy'), radius_ls)
+
+    f_obj = np.fft.fftshift(np.fft.fft2(obj))
+    f_ref = np.fft.fftshift(np.fft.fft2(ref))
+    f_obj_2 = np.abs(f_obj) ** 2
+    f_ref_2 = np.abs(f_ref) ** 2
+    f_prod = f_obj * np.conjugate(f_ref)
+
+    n_sample_pixel = np.count_nonzero(grid_delta > 1e-10)
+    n_ph = float(n_ph_tx) / n_sample_pixel
+    n_ph = np.round(n_ph, 1)
+
+    frc_ls = []
+    T_half_bit_ls = []
+    for rad in radius_ls:
+        print(rad)
+        if os.path.exists(os.path.join(save_path, 'mask_rad_{:04d}.tiff'.format(int(rad)))):
+            mask = dxchange.read_tiff(os.path.join(save_path, 'mask_rad_{:04d}.tiff'.format(int(rad))))
+        else:
+            mask = generate_ring(obj.shape, rad, anti_aliasing=2)
+            if save_mask:
+                dxchange.write_tiff(mask, os.path.join(save_path, 'mask_rad_{:04d}.tiff'.format(int(rad))),
+                                    dtype='float32', overwrite=True)
+            else:
+                pass
+
+        frc = abs(np.sum(f_prod * mask))
+        frc /= np.sqrt(np.sum(f_obj_2 * mask) * np.sum(f_ref_2 * mask))
+        frc_ls.append(frc)
+        nr = np.sqrt(np.count_nonzero(mask))
+        T_half_bit = (0.2071 + 1.9102 / nr) / (1.2071 + 0.97102 / nr)
+        T_half_bit_ls.append(T_half_bit)
+    np.save(os.path.join(save_path, 'frc_'+ str(encoding_mode)+'_' + n_ph_tx + '.npy'), np.array(frc_ls))
+
+
+    fig_ax.plot(radius_ls.astype(float) / radius_ls[-1], frc_ls, label=n_ph)
+
+    if show_plot_title:
+        fig_ax.set_title(plot_title)
+    else: pass
+    fig_ax.set_xlabel('Spatial frequency (1 / Nyquist)', fontsize=12)
+    fig_ax.set_ylabel('FRC', fontsize=12)
+
+    idx_intersection = np.argwhere(np.diff(np.sign(np.array(T_half_bit_ls) - np.array(frc_ls)))).flatten()
+    if len(idx_intersection) != 0:
+        return n_ph, radius_ls[idx_intersection[0]+1], radius_ls, T_half_bit_ls
+    else:
+        return None, None, radius_ls, T_half_bit_ls
+
+def half_bit_threshold(fig_ax, radius_ls, T_half_bit_ls, **kwargs):   
+    fig_ax.plot(radius_ls.astype(float)/radius_ls[-1], T_half_bit_ls, 'k--', label='1/2 bit threshold')
 
 def upsample_2x(arr):
 
